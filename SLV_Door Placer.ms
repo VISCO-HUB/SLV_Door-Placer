@@ -2,7 +2,7 @@
 [INFO] 
 
 NAME = Door Placer
-VERSION = 1.3.0
+VERSION = 1.4.0
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = help\doorPlacer.html
@@ -15,6 +15,10 @@ HELP = help\doorPlacer.html
 
 * Adopted for new Scripts Launcher=
 * Added load default windows template feature=
+
+[1.4.0]
+
+* Added: Support for UE (scale door mode)=
 
 [ABOUT]
 
@@ -35,7 +39,7 @@ ToDo:=
 
 
 try(closeRolloutFloater rDoorPlacer) catch()
-global rDoorPlacer = newRolloutFloater "Door Placer" 230 550
+global rDoorPlacer = newRolloutFloater "Door Placer" 230 600
 global szTemplateDoors = ""
 
 fn getScriptInfo s releaseInfo: "" =
@@ -71,6 +75,11 @@ rollout rDoorWindowPlacer "Place"
 (
 	listbox lbxList ""  height:8
 	button btnPlace "Place " enabled: true width: 190 height: 40 
+	
+	group "Mode" (
+		radiobuttons rdoPlaceType "" labels: #("Vertex Move", "Scale") default: 2
+	)
+	
 	group "Z Position"
 	(
 		checkbox cbxUseZ "Use Z Position"
@@ -128,13 +137,13 @@ rollout rDoorWindowPlacer "Place"
 	(
 		m = ""
 		b = ""
-		dr = DoorConstraint[x][1]
-		dl = DoorConstraint[x][2]
-		t1 = DoorConstraint[x][3]
-		t2 = DoorConstraint[x][4]
+		dt = DoorConstraint[x][6]
+		dpt = DoorConstraint[x][8]
 		
-		if(t1 != "" and t2 != "") do b = "\nThen set thickness."
-		if(dr != "" and dl != "") do m = "Door: " + Obj[x].name + ".\nPlace on top view, start from hinge." + b 
+		rdoPlaceType.state
+		
+		if(dt != "") do b = "\nThen set thickness."
+		if(dpt != "") do m = "Door: " + Obj[x].name + ".\nPlace on top view, start from hinge." + b 
 				
 		lblTip.caption = m
 	)
@@ -181,7 +190,7 @@ rollout rDoorWindowPlacer "Place"
 			return a
 		)
 				
-		for i in geometry where classOf i == Editable_Poly and ((getUserProp i "door_r") != undefined or (getUserProp i "wind_r") != undefined)  do
+		for i in geometry where classOf i == Editable_Poly and ((getUserProp i "door_place_type") == rdoPlaceType.state)   do
 		(
 			append Obj i
 			
@@ -192,14 +201,18 @@ rollout rDoorWindowPlacer "Place"
 			d[4] =  getPropArray "door_t2" i			
 			d[5] =  getPropOffset "door_w" i
 			d[6] = getPropOffset "door_t" i
-			d[7] = getPropArray "door_h" i
-			d[8] = getPropMatrix "door_m" i
+			d[7] = getPropArray "door_h" i			
+			d[8] = getUserProp i "door_place_type"
 						
 			append DoorConstraint d
 		)
 				
 		lbxList.items =  for i in Obj collect i.name
 		try(showTip 1)catch()
+	)
+	
+	on rdoPlaceType changed v do (
+		initPlacer()	
 	)
 	
 	on rDoorWindowPlacer open do
@@ -314,32 +327,140 @@ rollout rDoorWindowPlacer "Place"
 		try(select s) catch()
 	)
 	
+	fn roundTo v t: 100 = (	
+		v = v as float
+		t = t as float
+		v = (ceil (v * t)) as integer
+		return  v / t 
+	)
+	
+	fn placeDoorScale = (
+		undo off
+		(
+			fn tapeCallback o =
+			(
+				TapeCount += 1
+				if(TapeCount > 2) do stopCreating()
+			)
+					
+			n = startObjectCreation Tape returnNewNodes: true newNodeCallback: tapeCallback						
+		)
+				
+		undo off
+		(			
+			if(classOf n[2] == Targetobject) do 
+			(
+				i = lbxList.selection
+				
+				dw = DoorConstraint[i][5]
+				dt = DoorConstraint[i][6]
+			
+								
+				try(s = instance Obj[i]) 
+				catch
+				(
+					messageBox "Object not exist!"
+					return false
+				)
+				
+				w1 = distance n[1] n[2]					
+				sy = ((w1 - dw) / dw) + 1.0
+				
+				sy = roundTo sy t: 10000
+																
+				s.pivot.z = s.min.z
+															
+				tr = s.transform
+				tr.row1 = n[1].transform.row1
+				tr.row2 = n[1].transform.row2
+				tr.row3 = n[1].transform.row3
+					
+				s.transform = tr
+				
+				scale s [1, sy, 1]
+					
+				in coordsys local rotate s (EulerAngles -90 0 0)
+				in coordsys local rotate s (EulerAngles 0 0 90)		
+								
+				p = n[1].pos  - ((n[1].pos - n[1].target.pos) / 2.0)
+												
+				try(delete n) catch()
+				
+				s.pos.x = p.x
+				s.pos.y = p.y
+				s.pos.z = p.z
+						
+				if(cbxUseZ.checked == true) do s.pos.z = spnZPos.value				
+				
+				if(dt != "") do
+				(										
+					TapeCount = 0
+								
+					k = startObjectCreation Tape returnNewNodes: true newNodeCallback: tapeCallback			
+										
+					if(classOf k[2] == Targetobject) do 
+					(								
+						w1 = distance k[1] k[2]
+						
+						sx = ((w1 - dt) / dt) + 1.0				
+						sx = roundTo sx t: 10000
+						
+						s.scale.y = sx
+
+						try(delete k) catch()
+					)	
+				)					
+			)
+		)
+
+		TapeCount = 0
+		try(select s) catch()
+	)
+	
 	
 	on btnPlace pressed do
 	(			
 		i = lbxList.selection
-		dr = DoorConstraint[i][1]
-		dl = DoorConstraint[i][2]
 		
-		if(dr != "" and dl != "") do placeDoor()
+		
+		case rdoPlaceType.state of (
+			1: (				
+				dr = DoorConstraint[i][1]
+				dl = DoorConstraint[i][2]
+					
+				if(dr != "" and dl != "") do placeDoor()							
+			)
+			2: (
+				dw = DoorConstraint[i][5]
+				
+				if(dw != "") do placeDoorScale()	
+			)
+		)
+		
+		
 	)
 )
 
 rollout rDoorSetup "Door Setup" 
 (
+	group "Setup Doors Type" (
+		radiobuttons rdoPlaceType "" labels: #("Vertex Move", "Scale") default: 2
+	)
+	
+	group "Size Setup"
+	(
+		button btnAddTWidth "Add Width"
+		button btnAddThickness "Add Thickness (Optional)"	
+	)
+	
 	group "Vertex Sets"
 	(
 		button btnAddRightVert "Add Right Vertex"
 		button btnAddLeftVert "Add Left Vertex"
-		button btnAddTVert1 "Add Thickness +"
-		button btnAddTVert2 "Add Thickness -"
+		button btnAddTVert1 "Add Thickness + (Optional)"
+		button btnAddTVert2 "Add Thickness - (Optional)"
 	)
-	group "Size Setup"
-	(
-		button btnAddTWidth "Add Width"
-		button btnAddThickness "Add Thickness"	
-	)
-	
+		
 	group "Specify opening part"
 	(
 		button btnAddDoorEdge "Add Door Edge Vertex"
@@ -351,6 +472,20 @@ rollout rDoorSetup "Door Setup"
 		label lblTip "Set pivot in center and \nbottom of door!" height: 30 align: #left
 	)
 	
+	fn toggleInterface = (			
+		v = rdoPlaceType.state
+
+		btnAddTWidth.enabled = true
+		btnAddThickness.enabled = true
+
+		btnAddRightVert.enabled = v != 2
+		btnAddLeftVert.enabled = v != 2
+		btnAddTVert1.enabled = v != 2
+		btnAddTVert2.enabled = v != 2		
+		btnAddDoorEdge.enabled = v != 2		
+		btnAddDoorWidth.enabled = v != 2		
+	)
+	
 	fn setUserPropVert n =
 	(
 		try
@@ -359,6 +494,7 @@ rollout rDoorSetup "Door Setup"
 			z = ""
 			for i in a do z += i as string + ","
 			setUserProp $ n (z as string)		
+			setUserProp s "door_place_type" rdoPlaceType.state
 			messageBox ("Added " + a.count as string + " points!")			
 			
 			rDoorWindowPlacer.initPlacer()
@@ -392,7 +528,8 @@ rollout rDoorSetup "Door Setup"
 				
 				if(classOf t[2] == Targetobject) do 
 				(									
-					setUserProp s n (t[1].transform as string)	
+					setUserProp s n (t[1].transform as string)
+					setUserProp s "door_place_type" rdoPlaceType.state					
 									
 					try(delete t) catch()
 					select s
@@ -434,6 +571,7 @@ rollout rDoorSetup "Door Setup"
 					o = distance t[1] t[2]
 				
 					setUserProp s n (abs o)	
+					setUserProp s "door_place_type" rdoPlaceType.state
 									
 					try(delete t) catch()
 					select s
@@ -447,6 +585,14 @@ rollout rDoorSetup "Door Setup"
 		)
 		catch
 		()
+	)
+	
+	on rDoorSetup open do (
+		toggleInterface()
+	)
+	
+	on rdoPlaceType changed v do (
+		toggleInterface()			
 	)
 	
 	
