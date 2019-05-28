@@ -2,7 +2,7 @@
 [INFO] 
 
 NAME = Door Placer
-VERSION = 1.4.0
+VERSION = 1.4.1
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = help\doorPlacer.html
@@ -19,6 +19,10 @@ HELP = help\doorPlacer.html
 [1.4.0]
 
 * Added: Support for UE (scale door mode)=
+
+[1.4.1]
+
+- BugFix: Scale for some angles=
 
 [ABOUT]
 
@@ -369,18 +373,22 @@ rollout rDoorWindowPlacer "Place"
 				sy = roundTo sy t: 10000
 																
 				s.pivot.z = s.min.z
-															
+							
+				
+				
 				tr = s.transform
 				tr.row1 = n[1].transform.row1
 				tr.row2 = n[1].transform.row2
 				tr.row3 = n[1].transform.row3
-					
+				
 				s.transform = tr
 				
-				scale s [1, sy, 1]
+				--scale s [1, sy, 1]
 					
 				in coordsys local rotate s (EulerAngles -90 0 0)
 				in coordsys local rotate s (EulerAngles 0 0 90)		
+				-- Changed!
+				in coordsys local scale s [sy, 1, 1]
 								
 				p = n[1].pos  - ((n[1].pos - n[1].target.pos) / 2.0)
 												
