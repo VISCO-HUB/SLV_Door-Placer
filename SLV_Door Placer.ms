@@ -370,7 +370,7 @@ rollout rDoorWindowPlacer "Place"
 				w1 = distance n[1] n[2]					
 				sy = ((w1 - dw) / dw) + 1.0
 				
-				sy = roundTo sy t: 10000
+				--sy = roundTo sy t: 10000
 																
 				s.pivot.z = s.min.z
 							
