@@ -2,7 +2,7 @@
 [INFO] 
 
 NAME = Door Placer
-VERSION = 1.4.1
+VERSION = 1.4.2
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = help\doorPlacer.html
@@ -23,6 +23,12 @@ HELP = help\doorPlacer.html
 [1.4.1]
 
 - BugFix: Scale for some angles=
+
+[1.4.2]
+
+- BugFix: Scale mode=
+- BugFix: Vertex mode=
++ Added: Continious placing=
 
 [ABOUT]
 
@@ -78,7 +84,7 @@ fn parseToLine m =
 rollout rDoorWindowPlacer "Place" 
 (
 	listbox lbxList ""  height:8
-	button btnPlace "Place " enabled: true width: 190 height: 40 
+	checkbutton btnPlace "Place " enabled: true width: 190 height: 40 
 	
 	group "Mode" (
 		radiobuttons rdoPlaceType "" labels: #("Vertex Move", "Scale") default: 2
@@ -171,7 +177,7 @@ rollout rDoorWindowPlacer "Place"
 	(
 		Obj = #()
 		lbxList.items = #()
-		Constraint = #()
+		DoorConstraint = #()
 		
 		fn getPropArray p o =
 		(
@@ -197,7 +203,7 @@ rollout rDoorWindowPlacer "Place"
 		for i in geometry where classOf i == Editable_Poly and ((getUserProp i "door_place_type") == rdoPlaceType.state)   do
 		(
 			append Obj i
-			
+						
 			d = #()
 			d[1] = getPropArray "door_r" i
 			d[2] = getPropArray "door_l" i
@@ -254,11 +260,15 @@ rollout rDoorWindowPlacer "Place"
 					
 			n = startObjectCreation Tape returnNewNodes: true newNodeCallback: tapeCallback						
 		)
+		
+		btnPlace.checked = false
 				
 		undo off
 		(			
 			if(classOf n[2] == Targetobject) do 
 			(
+				btnPlace.checked = true
+				
 				i = lbxList.selection
 				r = DoorConstraint[i][1]
 				l = DoorConstraint[i][2]
@@ -329,6 +339,8 @@ rollout rDoorWindowPlacer "Place"
 
 		TapeCount = 0
 		try(select s) catch()
+		
+		if(btnPlace.checked) do placeDoor()
 	)
 	
 	fn roundTo v t: 100 = (	
@@ -349,17 +361,22 @@ rollout rDoorWindowPlacer "Place"
 					
 			n = startObjectCreation Tape returnNewNodes: true newNodeCallback: tapeCallback						
 		)
-				
+		
+		btnPlace.checked = false
+		
 		undo off
 		(			
 			if(classOf n[2] == Targetobject) do 
 			(
+				
+				btnPlace.checked = true
+				
 				i = lbxList.selection
 				
 				dw = DoorConstraint[i][5]
 				dt = DoorConstraint[i][6]
 			
-								
+				local s
 				try(s = instance Obj[i]) 
 				catch
 				(
@@ -368,13 +385,12 @@ rollout rDoorWindowPlacer "Place"
 				)
 				
 				w1 = distance n[1] n[2]					
-				sy = ((w1 - dw) / dw) + 1.0
-				
+				--sy = ((w1 - dw) / dw) + 1.0
+				sy = (w1 / dw) 
+								
 				--sy = roundTo sy t: 10000
-																
-				s.pivot.z = s.min.z
-							
 				
+				s.pivot.z = s.min.z
 				
 				tr = s.transform
 				tr.row1 = n[1].transform.row1
@@ -400,7 +416,7 @@ rollout rDoorWindowPlacer "Place"
 						
 				if(cbxUseZ.checked == true) do s.pos.z = spnZPos.value				
 				
-				if(dt != "") do
+				if(dt != "" and dt != 0.0) do
 				(										
 					TapeCount = 0
 								
@@ -409,11 +425,13 @@ rollout rDoorWindowPlacer "Place"
 					if(classOf k[2] == Targetobject) do 
 					(								
 						w1 = distance k[1] k[2]
-						
+												
 						sx = ((w1 - dt) / dt) + 1.0				
-						sx = roundTo sx t: 10000
+						--sx = roundTo sx t: 10000
+						sx = (w1 / dt)
 						
-						s.scale.y = sx
+						in coordsys local scale s [s.scale.x, sx, 1] 
+						--s.scale.z = sx
 
 						try(delete k) catch()
 					)	
@@ -423,29 +441,37 @@ rollout rDoorWindowPlacer "Place"
 
 		TapeCount = 0
 		try(select s) catch()
+		
+		if(btnPlace.checked) do placeDoorScale()
 	)
 	
 	
-	on btnPlace pressed do
+	on btnPlace changed x do
 	(			
 		i = lbxList.selection
 		
+		stopCreating()
 		
+		if(x != true or i == 0) do (
+			btnPlace.checked = false
+			return false
+		)
+		print (DoorConstraint)
 		case rdoPlaceType.state of (
 			1: (				
 				dr = DoorConstraint[i][1]
 				dl = DoorConstraint[i][2]
-					
+				
 				if(dr != "" and dl != "") do placeDoor()							
 			)
 			2: (
 				dw = DoorConstraint[i][5]
 				
-				if(dw != "") do placeDoorScale()	
+				if(dw != "") do placeDoorScale()				
 			)
 		)
 		
-		
+		btnPlace.checked = false
 	)
 )
 
